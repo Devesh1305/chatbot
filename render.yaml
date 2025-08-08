@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: whatsapp-chatbot
+    env: python
+    plan: starter       # choose your plan here
+    branch: main        # or your default branch
+    region: oregon      # or preferred region
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: WHATSAPP_TOKEN
+        fromSecureString: true
+      - key: PHONE_NUMBER_ID
+        fromSecureString: true
+      - key: VERIFY_TOKEN
+        fromSecureString: true
+      - key: MONGODB_URI
+        fromSecureString: true
+      - key: PORT
+        value: "8080"
