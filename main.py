@@ -81,12 +81,12 @@ def verify():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
-    VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN')
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
+    if mode == "subscribe" and token == os.environ.get('gitam_chatbot_configuration_A&D'):
         return challenge, 200
     else:
         return "Verification failed", 403
+
 
 
 # Webhook message handler
@@ -241,4 +241,5 @@ def send_submenu(phone, submenu_id):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT)
+
 
