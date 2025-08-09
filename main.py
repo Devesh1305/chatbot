@@ -78,8 +78,16 @@ def set_state(phone, state):
 # Webhook verification endpoint (modified to skip verify token)
 @app.route('/webhook', methods=['GET'])
 def verify():
-    # Directly return hub.challenge without verifying token
-    return request.args.get('hub.challenge', ''), 200
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+    VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN')
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
+    else:
+        return "Verification failed", 403
+
 
 # Webhook message handler
 @app.route('/webhook', methods=['POST'])
@@ -233,3 +241,4 @@ def send_submenu(phone, submenu_id):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT)
+
