@@ -2,19 +2,17 @@ services:
   - type: web
     name: whatsapp-chatbot
     env: python
-    plan: starter       # choose your plan here
-    branch: main        # or your default branch
-    region: oregon      # or preferred region
+    plan: starter       # choose plan: starter, standard, etc.
+    branch: main        # your repo's default branch
+    region: oregon      # pick closest region available to you
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
     envVars:
       - key: WHATSAPP_TOKEN
-        fromSecureString: true
+        sync: false
       - key: PHONE_NUMBER_ID
-        fromSecureString: true
+        sync: false
       - key: VERIFY_TOKEN
-        fromSecureString: true
+        sync: false
       - key: MONGODB_URI
-        fromSecureString: true
-      - key: PORT
-        value: "8080"
+        sync: false
