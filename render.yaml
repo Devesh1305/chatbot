@@ -6,7 +6,7 @@
     branch: main        # your repo's default branch
     region: oregon      # pick closest region available to you
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app --bind 0.0.0.0:8080"
+    startCommand: "gunicorn main:app --bind 0.0.0.0:8080"
     envVars:
       - key: WHATSAPP_TOKEN
         sync: false
@@ -16,4 +16,5 @@
         sync: false
       - key: MONGODB_URI
         sync: false
+
 
