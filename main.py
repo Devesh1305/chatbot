@@ -1,32 +1,25 @@
 from flask import Flask, request, jsonify
-from pymongo import MongoClient
 from datetime import datetime
 import requests
 import os
 
-# Environment variables (set securely in Railway dashboard)
-WHATSAPP_TOKEN = os.environ.get('WHATSAPP_TOKEN', '1108560464540992')
-PHONE_NUMBER_ID = os.environ.get('PHONE_NUMBER_ID', '595748270299355')
-# VERIFY_TOKEN no longer required for webhook verification
-MONGODB_URI = os.environ.get(
-    'MONGODB_URI',
-    'mongodb+srv://budidi3443:<p8zIYBDUOebFfJmC>@cluster0.irjsrky.mongodb.net/'
-)
+# Required environment variables
+WHATSAPP_TOKEN = os.environ.get('WHATSAPP_TOKEN')  # Cloud API access token
+PHONE_NUMBER_ID = os.environ.get('PHONE_NUMBER_ID')  # WhatsApp phone number ID
+VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN')  # Your chosen webhook verify token
 
-# Fixed port number (as per your request, no $PORT usage)
-PORT = 8080
+# Fixed port number (as per your request)
+PORT = int(os.environ.get('PORT', 8080))
+
+if not WHATSAPP_TOKEN or not PHONE_NUMBER_ID or not VERIFY_TOKEN:
+    raise RuntimeError("Missing required environment variables: WHATSAPP_TOKEN, PHONE_NUMBER_ID, VERIFY_TOKEN")
 
 app = Flask(__name__)
 
-# Setup MongoDB connection
-mongo_client = MongoClient(MONGODB_URI)
-db = mongo_client['whatsapp_chatbot']
-conversations = db['conversations']
-
 WA_API_URL = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
 
-# Helper to send text messages
-def send_text(phone, text):
+# ---- Messaging helpers ----
+def send_text(phone: str, text: str):
     headers = {
         'Authorization': f'Bearer {WHATSAPP_TOKEN}',
         'Content-Type': 'application/json'
@@ -37,15 +30,21 @@ def send_text(phone, text):
         'type': 'text',
         'text': {'body': text}
     }
-    requests.post(WA_API_URL, json=payload, headers=headers)
+    r = requests.post(WA_API_URL, json=payload, headers=headers, timeout=15)
+    r.raise_for_status()
 
-# Helper to send interactive button messages
-def send_buttons(phone, header_text, body_text, buttons):
+def send_buttons(phone: str, header_text: str, body_text: str, buttons):
+    """
+    buttons: list of tuples (btn_id, btn_title)
+    """
     headers = {
         'Authorization': f'Bearer {WHATSAPP_TOKEN}',
         'Content-Type': 'application/json'
     }
-    button_list = [{'type': 'reply', 'reply': {'id': btn_id, 'title': btn_title}} for btn_id, btn_title in buttons]
+    button_list = [
+        {'type': 'reply', 'reply': {'id': btn_id, 'title': btn_title}}
+        for btn_id, btn_title in buttons
+    ]
     payload = {
         'messaging_product': 'whatsapp',
         'to': phone,
@@ -57,122 +56,27 @@ def send_buttons(phone, header_text, body_text, buttons):
             'action': {'buttons': button_list}
         }
     }
-    requests.post(WA_API_URL, json=payload, headers=headers)
+    r = requests.post(WA_API_URL, json=payload, headers=headers, timeout=15)
+    r.raise_for_status()
 
-# Retrieve last conversation state for a user
-def get_state(phone):
-    record = conversations.find_one({'customer_number': phone}, sort=[('timestamp', -1)])
-    if record and 'state' in record:
-        return record['state']
-    return None
+def send_main_menu(phone: str):
+    buttons = [
+        ('3a', 'Accommodation'),
+        ('3b', 'Facilities'),
+        ('3c', 'Institutes'),
+        ('3d', 'Complaints & Emergencies'),
+        ('3e', 'Medical'),
+        ('3f', 'Educational'),
+        ('3g', 'Daily Essentials')
+    ]
+    send_buttons(
+        phone,
+        header_text='INS KALINGA Help Desk',
+        body_text='Please select one of the following questions as per your query.',
+        buttons=buttons
+    )
 
-# Save conversation state
-def set_state(phone, state):
-    conversations.insert_one({
-        'customer_number': phone,
-        'timestamp': datetime.utcnow(),
-        'state': state,
-        'direction': 'state_update'
-    })
-
-# Webhook verification endpoint (modified to skip verify token)
-@app.route('/webhook', methods=['GET'])
-def verify():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-
-    if mode == "subscribe" and token == os.environ.get('gitam_chatbot_configuration_A&D'):
-        return challenge, 200
-    else:
-        return "Verification failed", 403
-
-
-
-# Webhook message handler
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    data = request.get_json()
-    if data.get('object') == 'whatsapp_business_account':
-        for entry in data['entry']:
-            for change in entry['changes']:
-                value = change.get('value', {})
-                messages = value.get('messages', [])
-                for msg in messages:
-                    phone = msg['from']
-                    timestamp = int(msg['timestamp'])
-                    msg_id = msg['id']
-
-                    # Save incoming message
-                    conversations.insert_one({
-                        'customer_number': phone,
-                        'message_id': msg_id,
-                        'message_text': msg.get('text', {}).get('body') or '',
-                        'timestamp': datetime.utcfromtimestamp(timestamp),
-                        'direction': 'incoming',
-                        'state': get_state(phone)
-                    })
-
-                    state = get_state(phone)
-                    mtype = msg['type']
-
-                    if state is None:
-                        send_text(phone, "Welcome to GITAM DEMO ChatBot")
-                        set_state(phone, 'step_2')
-
-                    elif state == 'step_2':
-                        send_text(phone, "INS KALINGA Help Desk.\n\nHello Sir/Ma'am,\n\nGreetings of the day\n\nWelcome to the INS KALINGA Help Desk.\n\nPlease select one of the following questions as per your query.")
-                        set_state(phone, 'step_3')
-
-                    elif state == 'step_3':
-                        if mtype == 'text':
-                            buttons = [
-                                ('3a', 'Accommodation'),
-                                ('3b', 'Facilities'),
-                                ('3c', 'Institutes'),
-                                ('3d', 'Complaints & Emergencies'),
-                                ('3e', 'Medical'),
-                                ('3f', 'Educational'),
-                                ('3g', 'Daily Essentials')
-                            ]
-                            send_buttons(phone, 'INS KALINGA Help Desk', 'Please select one of the following questions as per your query.', buttons)
-                        elif mtype == 'interactive':
-                            button_reply = msg['interactive']['button_reply']['id']
-                            if button_reply.startswith('3'):
-                                send_submenu(phone, button_reply)
-                                set_state(phone, button_reply)
-                            else:
-                                send_text(phone, "Invalid selection, please try again.")
-
-                    elif state in ['3a', '3b', '3c', '3d', '3e', '3f', '3g']:
-                        if mtype == 'text':
-                            send_text(phone, "Thank you for your input. We will get back to you shortly.")
-                            set_state(phone, 'complete')
-                        elif mtype == 'interactive':
-                            button_reply = msg['interactive']['button_reply']['id']
-                            send_text(phone, f"You selected: {button_reply}. Please provide further details or type your message.")
-                            set_state(phone, 'step_100')
-
-                    elif state in ['step_100', 'complete']:
-                        send_text(phone, "Thank you for your response. If you need further assistance, type 'menu' to return to the main menu.")
-                        if msg.get('text', {}).get('body', '').lower() == 'menu':
-                            set_state(phone, 'step_3')
-                            buttons = [
-                                ('3a', 'Accommodation'),
-                                ('3b', 'Facilities'),
-                                ('3c', 'Institutes'),
-                                ('3d', 'Complaints & Emergencies'),
-                                ('3e', 'Medical'),
-                                ('3f', 'Educational'),
-                                ('3g', 'Daily Essentials')
-                            ]
-                            send_buttons(phone, 'INS KALINGA Help Desk', 'Please select one of the following questions as per your query.', buttons)
-                    else:
-                        send_text(phone, "Sorry, something went wrong. Let's start over. Welcome to GITAM DEMO ChatBot")
-                        set_state(phone, None)
-    return jsonify({'status': 'success'}), 200
-
-def send_submenu(phone, submenu_id):
+def send_submenu(phone: str, submenu_id: str):
     submenus = {
         '3a': ('ACCOMMODATION QUERY', [
             ('niar_cottage', 'Niar cottage'),
@@ -239,7 +143,85 @@ def send_submenu(phone, submenu_id):
     header, buttons = submenu
     send_buttons(phone, header, "Please select one of the following questions as per your query.", buttons)
 
+# ---- Webhook verification (GET) ----
+@app.route('/webhook', methods=['GET'])
+def verify():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
+    return "Verification failed", 403
+
+# ---- Webhook receiver (POST) ----
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.get_json(silent=True) or {}
+
+    # Only process WhatsApp Business Account updates
+    if data.get('object') != 'whatsapp_business_account':
+        return jsonify({'status': 'ignored'}), 200
+
+    try:
+        for entry in data.get('entry', []):
+            for change in entry.get('changes', []):
+                value = change.get('value', {})
+                messages = value.get('messages', [])
+                for msg in messages:
+                    phone = msg.get('from')
+                    mtype = msg.get('type')
+
+                    # Stateless routing:
+                    # - If user sends "menu" (text), show main menu
+                    # - If text (anything else), send greeting + menu
+                    # - If interactive button with id starting "3", show submenu
+                    # - If interactive button within submenu, echo selection and ask for details
+
+                    if not phone:
+                        continue
+
+                    if mtype == 'text':
+                        body = (msg.get('text', {}) or {}).get('body', '')
+                        if body.strip().lower() == 'menu':
+                            send_main_menu(phone)
+                        else:
+                            send_text(phone, "INS KALINGA Help Desk.\n\nHello Sir/Ma'am,\n\nGreetings of the day.\n\nWelcome to the INS KALINGA Help Desk.\n\nPlease select one of the following questions as per your query.")
+                            send_main_menu(phone)
+
+                    elif mtype == 'interactive':
+                        interactive = msg.get('interactive', {}) or {}
+
+                        # Button replies
+                        if 'button_reply' in interactive:
+                            button_reply = interactive['button_reply'] or {}
+                            btn_id = button_reply.get('id', '')
+
+                            # Main menu buttons start with "3"
+                            if btn_id.startswith('3'):
+                                # Send submenu for that section
+                                send_submenu(phone, btn_id)
+                            else:
+                                # Submenu item selected
+                                send_text(phone, f"You selected: {btn_id}. Please provide further details or type 'menu' to return to the main menu.")
+
+                        # List replies (if you later switch to list-type interactive)
+                        elif 'list_reply' in interactive:
+                            list_reply = interactive['list_reply'] or {}
+                            sel_id = list_reply.get('id', '')
+                            send_text(phone, f"You selected: {sel_id}. Please provide further details or type 'menu' to return to the main menu.")
+
+                        else:
+                            send_text(phone, "Unsupported interactive message. Type 'menu' to see options.")
+
+                    else:
+                        # Handle other message types gracefully
+                        send_text(phone, "Message received. Type 'menu' to see available options.")
+    except Exception as e:
+        # Log server-side; respond 200 to avoid repeated delivery
+        print("Error handling webhook:", e)
+    return jsonify({'status': 'success'}), 200
+
 if __name__ == '__main__':
+    # Bind to 0.0.0.0 for deployment platforms
     app.run(host='0.0.0.0', port=PORT)
-
-
