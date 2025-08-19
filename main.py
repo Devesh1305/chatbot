@@ -10,7 +10,7 @@ import sqlite3
 WHATSAPP_TOKEN = os.environ.get('WHATSAPP_TOKEN', '1108560464540992')
 PHONE_NUMBER_ID = os.environ.get('PHONE_NUMBER_ID', '595748270299355')
 PORT = 8080
-app = Flask(_name_)
+app = Flask(__name__)
 
 # ======
 # SQLite: Store only message logs (no user info)
@@ -200,4 +200,5 @@ def download_db():
 # ======
 if _name_ == '__main__':
     app.run(host='0.0.0.0', port=PORT)
+
 
