@@ -11,7 +11,7 @@ WHATSAPP_TOKEN = os.environ.get('WHATSAPP_TOKEN', '1108560464540992')
 PHONE_NUMBER_ID = os.environ.get('PHONE_NUMBER_ID', '595748270299355')
 VERIFY_TOKEN = os.environ.get('gitam_chatbot_configuration_A&D', 'gitam_chatbot_configuration_A&D')
 PORT = 8080
-app = Flask(_name_)
+app = Flask(__name__)
 
 # ======
 # SQLite: Store only message logs (no user info)
@@ -194,5 +194,6 @@ def download_db():
 # ======
 # Run App
 # ======
-if _name_ == '_main_':
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT)
+
