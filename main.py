@@ -9,8 +9,9 @@ import sqlite3
 # ======
 WHATSAPP_TOKEN = os.environ.get('WHATSAPP_TOKEN', '1108560464540992')
 PHONE_NUMBER_ID = os.environ.get('PHONE_NUMBER_ID', '595748270299355')
+VERIFY_TOKEN = os.environ.get('gitam_chatbot_configuration_A&D', 'gitam_chatbot_configuration_A&D')
 PORT = 8080
-app = Flask(__name__)
+app = Flask(_name_)
 
 # ======
 # SQLite: Store only message logs (no user info)
@@ -23,7 +24,7 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            direction TEXT,           -- incoming / outgoing
+            direction TEXT,
             message_text TEXT,
             timestamp TEXT
         )
@@ -42,7 +43,7 @@ def log_message(direction, message_text, timestamp):
     conn.commit()
 
 # ======
-# Session State (in-memory only, not stored in DB)
+# Session State
 # ======
 sessions = {}
 
@@ -69,7 +70,6 @@ def send_text(phone, text):
         'text': {'body': text}
     }
     requests.post(WA_API_URL, json=payload, headers=headers)
-    # Log outgoing response only
     log_message('outgoing', text, datetime.utcnow().isoformat())
 
 def send_buttons(phone, header_text, body_text, buttons):
@@ -90,7 +90,6 @@ def send_buttons(phone, header_text, body_text, buttons):
         }
     }
     requests.post(WA_API_URL, json=payload, headers=headers)
-    # Log button response sent
     log_message('outgoing', f"[BUTTONS] {header_text} - {body_text}", datetime.utcnow().isoformat())
 
 # ======
@@ -101,7 +100,7 @@ def verify():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
-    if mode == "subscribe" and token == os.environ.get('gitam_chatbot_configuration_A&D'):
+    if mode == "subscribe" and token == VERIFY_TOKEN:
         return challenge, 200
     else:
         return "Verification failed", 403
@@ -120,10 +119,8 @@ def webhook():
                     text_body = msg.get('text', {}).get('body') or ''
                     mtype = msg['type']
 
-                    # ✅ Log incoming messages only (no user info)
                     log_message('incoming', text_body, datetime.utcfromtimestamp(timestamp).isoformat())
 
-                    # Session-based state machine (in-memory)
                     state = get_state(phone)
 
                     if state is None:
@@ -158,7 +155,7 @@ def webhook():
     return jsonify({'status': 'success'}), 200
 
 # ======
-# Submenu (unchanged)
+# Submenu
 # ======
 def send_submenu(phone, submenu_id):
     submenus = {
@@ -173,7 +170,6 @@ def send_submenu(phone, submenu_id):
             ('swimming_pool', 'Swimming Pool'),
             ('canteen', 'Canteen')
         ]),
-        # Add others as before...
     }
     submenu = submenus.get(submenu_id)
     if not submenu:
@@ -198,8 +194,5 @@ def download_db():
 # ======
 # Run App
 # ======
-if __name__ == '__main__':
+if _name_ == '_main_':
     app.run(host='0.0.0.0', port=PORT)
-
-
-
